@@ -705,15 +705,27 @@ function renderEncargado() {
 async function encargadoEmpezar(id) {
   const { error } = await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', id);
   if (error) { toast('Error al actualizar, intentá de nuevo'); console.error(error); return; }
+  // Actualizar local inmediatamente
+  const item = colaData.find(r => r.id === id);
+  if (item) { item.estado = 'procesando'; item.empezo_a_las = new Date().toISOString(); }
   toast('¡Arrancaste!');
+  renderEncargado();
 }
 
 async function encargadoFinalizar(id) {
-  await db.from('cola').update({ estado: 'listo', termino_a_las: new Date().toISOString() }).eq('id', id);
+  const { error } = await db.from('cola').update({ estado: 'listo', termino_a_las: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('Error al guardar, intentá de nuevo'); return; }
   const siguiente = colaData.find(r => r.estado === 'pendiente' && r.id !== id);
   if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
-  // cargarCola va a triggerear renderEncargado que muestra el estado "listo"
+  // Actualizar local inmediatamente sin esperar Supabase realtime
+  const item = colaData.find(r => r.id === id);
+  if (item) { item.estado = 'listo'; item.termino_a_las = new Date().toISOString(); }
+  if (siguiente) {
+    const sig = colaData.find(r => r.id === siguiente.id);
+    if (sig) { sig.estado = 'procesando'; sig.empezo_a_las = new Date().toISOString(); }
+  }
   toast('✓ ¡Procesado!');
+  renderEncargado();
 }
 
 async function encargadoError(id) {
@@ -721,7 +733,15 @@ async function encargadoError(id) {
   await db.from('cola').update({ estado: 'error', orden: maxOrden + 1, tuvo_error: true }).eq('id', id);
   const siguiente = colaData.find(r => r.estado === 'pendiente' && r.id !== id);
   if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
+  // Actualizar local inmediatamente
+  const item = colaData.find(r => r.id === id);
+  if (item) { item.estado = 'error'; item.orden = maxOrden + 1; item.tuvo_error = true; }
+  if (siguiente) {
+    const sig = colaData.find(r => r.id === siguiente.id);
+    if (sig) { sig.estado = 'procesando'; sig.empezo_a_las = new Date().toISOString(); }
+  }
   toast('⚠️ Fuiste al final de la cola');
+  renderEncargado();
 }
 
 async function encargadoReintento(id) {
