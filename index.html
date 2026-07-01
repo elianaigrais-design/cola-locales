@@ -631,6 +631,8 @@ function renderEncargado() {
     `; return;
   }
 
+  const id = mi.id;
+
   if (mi.estado === 'error') {
     content.innerHTML = `
       <div class="turno-card con-error" style="margin-top:24px">
@@ -638,7 +640,7 @@ function renderEncargado() {
         <div class="turno-nombre" style="color:var(--danger)">${mi.nombre}</div>
         <div class="turno-sub" style="margin-top:8px">Fuiste movido al final de la cola</div>
       </div>
-      <button class="btn primary" style="width:100%;height:52px;margin-top:10px;font-size:15px" onclick="encargadoReintento('${mi.id}')">
+      <button class="btn primary" style="width:100%;height:52px;margin-top:10px;font-size:15px" onclick="encargadoReintento('${id}')">
         Listo para reintentar
       </button>
       <button class="btn" style="width:100%;height:44px;margin-top:8px" onclick="salirEncargado()">Salir de la cola</button>
@@ -648,11 +650,11 @@ function renderEncargado() {
   if (mi.estado === 'listo') {
     content.innerHTML = `
       <div class="turno-card listo" style="margin-top:24px">
-        <div class="turno-label">Estado</div>
-        <div class="turno-nombre" style="color:var(--success)">✓ Procesado</div>
-        <div class="turno-sub" style="margin-top:8px">¡Todo listo!</div>
+        <div class="turno-label">✓ Procesado</div>
+        <div class="turno-nombre" style="color:var(--success)">${mi.nombre}</div>
+        <div class="turno-sub" style="margin-top:8px">¡Todo listo por hoy!</div>
       </div>
-      <button class="btn" style="width:100%;height:44px;margin-top:12px" onclick="salirEncargado()">Volver</button>
+      <button class="btn" style="width:100%;height:44px;margin-top:16px" onclick="salirEncargado()">← Ver la cola</button>
     `; return;
   }
 
@@ -664,8 +666,8 @@ function renderEncargado() {
         <div class="turno-sub" style="margin-top:8px">Podés empezar a procesar ahora</div>
       </div>
       <div class="btn-row">
-        <button class="btn success" onclick="encargadoFinalizar('${mi.id}')">✓ Terminé</button>
-        <button class="btn danger" onclick="encargadoError('${mi.id}')">⚠️ Tuve un error</button>
+        <button class="btn success" onclick="encargadoFinalizar('${id}')">✓ Terminé</button>
+        <button class="btn danger" onclick="encargadoError('${id}')">⚠️ Tuve un error</button>
       </div>
     `; return;
   }
@@ -694,21 +696,24 @@ function renderEncargado() {
       </div>
     </div>
     ${esSiguiente ? `
-    <button class="btn primary" style="width:100%;height:56px;margin-top:10px;font-size:16px" onclick="encargadoEmpezar('${mi.id}')">
+    <button class="btn primary" style="width:100%;height:56px;margin-top:10px;font-size:16px" onclick="encargadoEmpezar('${id}')">
       Empezar a procesar
     </button>` : ''}
   `;
 }
 
 async function encargadoEmpezar(id) {
-  await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', id);
+  const { error } = await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('Error al actualizar, intentá de nuevo'); console.error(error); return; }
+  toast('¡Arrancaste!');
 }
 
 async function encargadoFinalizar(id) {
   await db.from('cola').update({ estado: 'listo', termino_a_las: new Date().toISOString() }).eq('id', id);
   const siguiente = colaData.find(r => r.estado === 'pendiente' && r.id !== id);
   if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
-  toast('✓ ¡Listo!');
+  // cargarCola va a triggerear renderEncargado que muestra el estado "listo"
+  toast('✓ ¡Procesado!');
 }
 
 async function encargadoError(id) {
