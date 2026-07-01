@@ -297,8 +297,42 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let colaData = [];
 let miLocalId = null;
+let miLocalNombre = '';
 let pinIngresado = '';
 let subscription = null;
+
+// PERSISTENCIA
+function guardarEstado(vista, id, nombre) {
+  try {
+    localStorage.setItem('cola_vista', vista);
+    localStorage.setItem('cola_local_id', id || '');
+    localStorage.setItem('cola_local_nombre', nombre || '');
+  } catch(e) {}
+}
+
+function restaurarEstado() {
+  try {
+    const vista = localStorage.getItem('cola_vista');
+    const id = localStorage.getItem('cola_local_id');
+    const nombre = localStorage.getItem('cola_local_nombre');
+    if (vista === 'encargado' && id) {
+      miLocalId = id;
+      miLocalNombre = nombre;
+      document.getElementById('enc-local-nombre').textContent = nombre;
+      show('view-encargado');
+      return true;
+    }
+    if (vista === 'selector') {
+      show('view-selector');
+      return true;
+    }
+    if (vista === 'admin') {
+      show('view-admin');
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────────────
 
@@ -309,6 +343,7 @@ function show(id) {
 }
 
 function mostrarSelector() {
+  guardarEstado('selector', '', '');
   show('view-selector');
   cargarCola();
   suscribirse();
@@ -328,18 +363,20 @@ function cerrarPin() {
 }
 
 function volverInicio() {
-  if (subscription) { subscription.unsubscribe(); subscription = null; }
+  guardarEstado('inicio', '', '');
   show('view-inicio');
 }
 
 function salirEncargado() {
   miLocalId = null;
+  miLocalNombre = '';
+  guardarEstado('selector', '', '');
   show('view-selector');
   renderLocalesEnCola();
 }
 
 function salirAdmin() {
-  if (subscription) { subscription.unsubscribe(); subscription = null; }
+  guardarEstado('inicio', '', '');
   show('view-inicio');
 }
 
@@ -361,6 +398,7 @@ function pinPress(val) {
   if (pinIngresado.length === 4) {
     if (pinIngresado === ADMIN_PIN) {
       cerrarPin();
+      guardarEstado('admin', '', '');
       show('view-admin');
       cargarCola();
       suscribirse();
@@ -562,6 +600,8 @@ async function quitarLocal(id) {
 
 function elegirLocal(id, nombre) {
   miLocalId = id;
+  miLocalNombre = nombre;
+  guardarEstado('encargado', id, nombre);
   document.getElementById('enc-local-nombre').textContent = nombre;
   show('view-encargado');
   cargarCola();
@@ -703,6 +743,13 @@ function toast(msg) {
 
 document.getElementById('input-nuevo')?.addEventListener('keydown', e => { if (e.key === 'Enter') agregarLocal(); });
 document.getElementById('input-mi-local')?.addEventListener('keydown', e => { if (e.key === 'Enter') anotarme(); });
+
+// Arrancar suscripcion global siempre, restaurar estado al cargar
+suscribirse();
+cargarCola();
+if (!restaurarEstado()) {
+  show('view-inicio');
+}
 </script>
 </body>
 </html>
