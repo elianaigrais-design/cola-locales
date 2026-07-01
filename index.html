@@ -291,6 +291,18 @@
 const SUPABASE_URL = 'https://vxyccplyecbfvyxspaxw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_vATJV2Rzlw6UEoUcXEktDw_sAqGDchI';
 const ADMIN_PIN = '7294';
+const TG_TOKEN = '8920662334:AAH6BliDisaGF-UhdnVBL6IFzxJWCH1VBWM';
+const TG_CHAT  = '-5416250983';
+
+async function notificarTelegram(mensaje) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TG_CHAT, text: mensaje, parse_mode: 'HTML' })
+    });
+  } catch(e) { console.error('Telegram error:', e); }
+}
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -574,7 +586,10 @@ async function agregarLocal() {
 async function marcarListo(id) {
   await db.from('cola').update({ estado: 'listo', termino_a_las: new Date().toISOString() }).eq('id', id);
   const siguiente = colaData.find(r => r.estado === 'pendiente');
-  if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
+  if (siguiente) {
+    await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
+    notificarTelegram(`🟢 <b>${siguiente.nombre}</b> — ¡es tu turno!\n\nEntrá a cola-locales.vercel.app y tocá "Empezar a procesar".`);
+  }
   toast('✓ Listo.');
 }
 
@@ -705,7 +720,6 @@ function renderEncargado() {
 async function encargadoEmpezar(id) {
   const { error } = await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', id);
   if (error) { toast('Error al actualizar, intentá de nuevo'); console.error(error); return; }
-  // Actualizar local inmediatamente
   const item = colaData.find(r => r.id === id);
   if (item) { item.estado = 'procesando'; item.empezo_a_las = new Date().toISOString(); }
   toast('¡Arrancaste!');
@@ -717,12 +731,12 @@ async function encargadoFinalizar(id) {
   if (error) { toast('Error al guardar, intentá de nuevo'); return; }
   const siguiente = colaData.find(r => r.estado === 'pendiente' && r.id !== id);
   if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
-  // Actualizar local inmediatamente sin esperar Supabase realtime
   const item = colaData.find(r => r.id === id);
   if (item) { item.estado = 'listo'; item.termino_a_las = new Date().toISOString(); }
   if (siguiente) {
     const sig = colaData.find(r => r.id === siguiente.id);
     if (sig) { sig.estado = 'procesando'; sig.empezo_a_las = new Date().toISOString(); }
+    notificarTelegram(`🟢 <b>${sig.nombre}</b> — ¡es tu turno!\n\nEntrá a cola-locales.vercel.app y tocá "Empezar a procesar".`);
   }
   toast('✓ ¡Procesado!');
   renderEncargado();
@@ -733,12 +747,12 @@ async function encargadoError(id) {
   await db.from('cola').update({ estado: 'error', orden: maxOrden + 1, tuvo_error: true }).eq('id', id);
   const siguiente = colaData.find(r => r.estado === 'pendiente' && r.id !== id);
   if (siguiente) await db.from('cola').update({ estado: 'procesando', empezo_a_las: new Date().toISOString() }).eq('id', siguiente.id);
-  // Actualizar local inmediatamente
   const item = colaData.find(r => r.id === id);
   if (item) { item.estado = 'error'; item.orden = maxOrden + 1; item.tuvo_error = true; }
   if (siguiente) {
     const sig = colaData.find(r => r.id === siguiente.id);
     if (sig) { sig.estado = 'procesando'; sig.empezo_a_las = new Date().toISOString(); }
+    notificarTelegram(`🟢 <b>${sig.nombre}</b> — ¡es tu turno!\n\n(El local anterior tuvo un error)\nEntrá a cola-locales.vercel.app y tocá "Empezar a procesar".`);
   }
   toast('⚠️ Fuiste al final de la cola');
   renderEncargado();
